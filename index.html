@@ -1,0 +1,52 @@
+<!doctype html>
+
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>WebGPU Life</title>
+    </head>
+    <body>
+        <canvas width="512" height="512"></canvas>
+        <script type="module">
+            const canvas = document.querySelector("canvas");
+
+            if (!navigator.gpu) {
+                throw new Error("WebGPU not supported on this browser.");
+            }
+
+            const adapter = await navigator.gpu.requestAdapter(); // browser can pick default adapter but you can put custom args here based on POWWWWER
+            if (!adapter) {
+                throw new Error("No appropriate GPUAdapter found.");
+            }
+
+            const device = await adapter.requestDevice();
+
+            const context = canvas.getContext("webgpu");
+            const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+            context.configure({
+                device: device,
+                format: canvasFormat, // texture format that the context should use
+            });
+
+            const encoder = device.createCommandEncoder(); // providing commands to GPU instructing it on what to do
+
+            // need to send the encoder a render pass which allows for drawing operations in wgpu
+            const pass = encoder.beginRenderPass({
+                colorAttachments: [{
+                    view: context.getCurrentTexture().createView(), // let render pass use the entire texture
+                    loadOp: "clear", // want the texture to be cleared when the render pass starts
+                    clearValue: {r: 0, g: 0, b: 0.4, a:1 },
+                    storeOp: "store", // once render pass is finsihed you want the results of any drawing done during the render pass saved into the texture
+                }]
+            });
+            pass.end(); // end the render pass. Making these call do not cause the GPU to do anything, it's just recording commands for the GPU to do later
+
+            const commandBuffer = encoder.finish(); // need to finish the encoder to create a buffer. This is an opaque handle to the recorded commands
+            device.queue.submit([commandBuffer]) // now commands are sent to the GPU. Once commands are submitted, cannot be used again. More commands? Build another command buffer
+
+            // Finish the command buffer and immediately submit it
+            device.queue.submit([encoder.finish()]) // submit commands to the GPU, let JavaScript return control to the browser. Now the browser knows the current texture to the context and updates the canvas to display that texture as an image
+
+        </script>
+    </body>
+</html>
